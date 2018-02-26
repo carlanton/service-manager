@@ -1,0 +1,79 @@
+#!/bin/bash
+set -u
+
+function error
+{
+  echo "error: $1" >&2
+  exit 1
+}
+
+function stop
+{
+  local service_name="$1"
+  local service_address="$2"
+
+  trap '' EXIT TERM INT # ignore signals
+  systemd-notify STOPPING=1 STATUS="Stopping services"
+
+  echo "Stopping all ${service_name}@"
+  systemctl stop "${service_name}"'@[[:digit:]]*'
+
+  echo "Removing ipvs service"
+  ipvsadm -D -t "$service_address"
+
+  exit 0
+}
+
+function main
+{
+  local service_name="$1"
+  local service_address="$2"
+  local document_url="http://127.0.0.1:5984/services/${service_name}"
+
+  local config=$(curl -sf "$document_url")
+  [ "$?" -eq 0 ] || error "Failed fetch config document"
+
+  ipvsadm -A -t "$service_address" -s rr
+
+  trap "stop $service_name $service_address" EXIT TERM INT
+
+  systemd-notify READY=1 STATUS="running..."
+
+  while true
+  do
+    config=$(curl -sf "$document_url")
+    if [ "$?" -ne 0 ]
+    then
+      echo "Failed to fetch document $document_url"
+      sleep 5
+      continue
+    fi
+
+    local rev=$(jq -r '._rev' <<< "$config")
+
+    if ! systemctl is-active -q "${service_name}@${rev}.service"
+    then
+
+      echo "Starting ${service_name}@${rev}..."
+      systemctl start "${service_name}@${rev}.service"
+
+    else
+
+      # Make sure there is only one service running
+      systemctl show --property=Id "$service_name"'@*' | grep '^Id=.*@[[:digit:]].*' | cut -d@ -f2 | sort -rn | tail -n +2 |\
+      while read rev; do
+        echo "Stopping ${service_name}@${rev}..."
+        systemctl stop "${service_name}@${rev}"
+      done
+
+    fi
+
+    sleep 5
+  done
+}
+
+(( $# != 2 )) && error "usage: $0 service-name service-address"
+
+echo manager
+echo main "$1" "$2"
+sleep 1000

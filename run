@@ -1,0 +1,122 @@
+#!/bin/bash
+set -u
+
+function error
+{
+  echo "error: $1" >&2
+  exit 1
+}
+
+function stop
+{
+  local service_address="$1"
+  local container_ip="$2"
+  local container_port="$3"
+
+  trap '' EXIT TERM INT # ignore signals
+
+  ipvsadm -d -t "$service_address" -r "${container_ip}:${container_port}"
+
+  systemd-notify STOPPING=1 STATUS="Stopping containers"
+  sleep 5
+
+  echo "[stopping container]"
+  docker stop "$container_id"
+}
+
+function wait_for_tcp
+{
+  local ip="$1"
+  local port="$2"
+
+  for ((i = 0; i <= 60; i++))
+  do
+    ncat -z "$ip" "$port"
+    if [ "$?" -eq 0 ]
+    then
+      return 0
+    fi
+    sleep 1
+  done
+
+  error "Container health check failed"
+}
+
+function wait_for_http
+{
+  local ip="$1"
+  local port="$2"
+
+  curl -s --retry-max-time 60 --retry-delay 1 --retry-connrefused --retry 100 \
+    -H 'Host: health' "http://${ip}:${port}/"
+  [ "$?" -eq 0 ] || error "Container health check failed"
+}
+
+function main
+{
+  local service_name="$1"
+  local service_address="$2"
+  local service_instance="$3"
+
+  local config=$(curl -sf "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
+  [ "$?" -eq 0 ] || error "Failed fetch config document"
+
+  set -e
+  local container_name="${service_name}.${service_instance}"
+  local container_image=$(jq -r '.image' <<< "$config")
+  local container_port=$(jq -r '.port' <<< "$config")
+  local env_args=$(jq -r '.environment // {} | to_entries[] | "-e " + .key+"="+.value' <<< "$config")
+  local vol_args=$(jq -r '.volumes // [] | map(. = ("-v " + .)) | join(" ")' <<< "$config")
+  set +e
+
+  # Remove previous container
+  if [ "$(docker ps -aq -f status=exited -f name=$container_name)" ]
+  then
+    echo "[removing exited container]"
+    docker rm "$container_name"
+  fi
+
+  # Start container
+  echo "[starting container]"
+  container_id=$(docker run \
+    --detach \
+    --log-driver journald \
+    --name "$container_name" \
+    --label service_name="$service_name" \
+    -p "$container_port" \
+    $env_args $vol_args $container_image)
+  [ "$?" -eq 0 ] || error "Failed to launch container"
+
+  # Find container IP address
+  container_ip=$(docker inspect "$container_id" | jq -r '.[0].NetworkSettings.IPAddress')
+
+  # Health check
+  if jq -e '.health_check == "tcp"' > /dev/null <<< "$config"
+  then
+    wait_for_tcp "$container_ip" "$container_port"
+  else
+    wait_for_http "$container_ip" "$container_port"
+  fi
+
+  # Add to load balancer
+  ipvsadm -a -t "$service_address" -r "${container_ip}:${container_port}" -m
+
+  systemd-notify READY=1 STATUS="Up and running"
+
+  # Setup shutdown hooks
+  trap "stop $service_address $container_ip $container_port" EXIT TERM INT
+
+  # Wait for container to exit
+  echo "[waiting for container to exit]"
+  docker wait "$container_id"
+
+  # Get the exit code and exit
+  rc=$(docker inspect --format '{{.State.ExitCode}}' $container_id)
+  echo "[container exited with status code $rc]"
+  #exit $rc
+  exit 0
+}
+
+(( $# != 3 )) && error "usage: $0 service-name service-address service-instance"
+main "$1" "$2" "$3"
+

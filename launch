@@ -1,0 +1,19 @@
+#!/bin/bash
+set -u
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+
+if (( $# != 3 ))
+then
+  echo "usage: $0 service-name service-address [service-instance|manager]"
+  exit 1
+fi
+
+
+if [ "$3" = "manager" ]
+then
+  exec "$DIR"/manager "$1" "$2"
+else
+  exec "$DIR"/run "$1" "$2" "$3"
+fi
+
