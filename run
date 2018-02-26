@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# run
+#
+# Starts a Docker container from a CouchDb service definition
+#
 set -u
 
 function error
@@ -28,6 +33,7 @@ function wait_for_tcp
 {
   local ip="$1"
   local port="$2"
+  echo "[waiting for health check tcp://$ip:$port]"
 
   for ((i = 0; i <= 60; i++))
   do
@@ -46,6 +52,7 @@ function wait_for_http
 {
   local ip="$1"
   local port="$2"
+  echo "[waiting for health check http://$ip:$port]"
 
   curl -s --retry-max-time 60 --retry-delay 1 --retry-connrefused --retry 100 \
     -H 'Host: health' "http://${ip}:${port}/"
@@ -58,7 +65,8 @@ function main
   local service_address="$2"
   local service_instance="$3"
 
-  local config=$(curl -sf "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
+  local config=$(curl -sf \
+      "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
   [ "$?" -eq 0 ] || error "Failed fetch config document"
 
   set -e
@@ -91,12 +99,9 @@ function main
   container_ip=$(docker inspect "$container_id" | jq -r '.[0].NetworkSettings.IPAddress')
 
   # Health check
-  if jq -e '.health_check == "tcp"' > /dev/null <<< "$config"
-  then
-    wait_for_tcp "$container_ip" "$container_port"
-  else
-    wait_for_http "$container_ip" "$container_port"
-  fi
+  jq -e '.health_check == "tcp"' > /dev/null <<< "$config" && \
+      wait_for_tcp "$container_ip" "$container_port" || \
+      wait_for_http "$container_ip" "$container_port"
 
   # Add to load balancer
   ipvsadm -a -t "$service_address" -r "${container_ip}:${container_port}" -m
@@ -106,7 +111,6 @@ function main
   # Setup shutdown hooks
   trap "stop $service_address $container_ip $container_port" EXIT TERM INT
 
-  # Wait for container to exit
   echo "[waiting for container to exit]"
   docker wait "$container_id"
 
