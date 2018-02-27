@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run
+# runner
 #
 # Starts a Docker container from a CouchDb service definition
 #

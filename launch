@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# launch
+#
+# Simple wrapper that launches either the manager or the runner
+#
 set -u
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -16,6 +21,6 @@ if [ "$instance" = "manager" ]
 then
   exec "$DIR"/manager "$name" "$address"
 else
-  exec "$DIR"/run "$name" "$instance" "$address"
+  exec "$DIR"/runner "$name" "$instance" "$address"
 fi
 
