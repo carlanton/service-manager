@@ -62,19 +62,18 @@ function wait_for_http
 function main
 {
   local service_name="$1"
-  local service_address="$2"
-  local service_instance="$3"
+  local service_instance="$2"
+  local service_address="$3"
 
-  local config=$(curl -sf \
-      "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
+  config=$(curl -sf "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
   [ "$?" -eq 0 ] || error "Failed fetch config document"
 
   set -e
-  local container_name="${service_name}.${service_instance}"
-  local container_image=$(jq -r '.image' <<< "$config")
-  local container_port=$(jq -r '.port' <<< "$config")
-  local env_args=$(jq -r '.environment // {} | to_entries[] | "-e " + .key+"="+.value' <<< "$config")
-  local vol_args=$(jq -r '.volumes // [] | map(. = ("-v " + .)) | join(" ")' <<< "$config")
+  container_name="${service_name}.${service_instance}"
+  container_image=$(jq -r '.image' <<< "$config")
+  container_port=$(jq -r '.port' <<< "$config")
+  env_args=$(jq -r '.environment // {} | to_entries[] | "-e " + .key+"="+.value' <<< "$config")
+  vol_args=$(jq -r '.volumes // [] | map(. = ("-v " + .)) | join(" ")' <<< "$config")
   set +e
 
   # Remove previous container
@@ -121,6 +120,6 @@ function main
   exit 0
 }
 
-(( $# != 3 )) && error "usage: $0 service-name service-address service-instance"
+(( $# != 3 )) && error "usage: $0 service-name service-instance service-address"
 main "$1" "$2" "$3"
 

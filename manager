@@ -45,12 +45,10 @@ function main
 
   trap "stop $service_name $service_address" EXIT TERM INT
 
-  systemd-notify READY=1 STATUS="running..."
 
   while true
   do
-    config=$(curl -sf "$document_url")
-    local rev=$(curl -Isf "$document_url" | grep '^ETag:' | cut -d'"' -f2)
+    rev=$(curl -Isf "$document_url" | grep '^ETag:' | cut -d'"' -f2)
     if [ "$?" -ne 0 ]
     then
       echo "warning: failed to fetch config document $document_url"
@@ -63,15 +61,20 @@ function main
 
       echo "[starting ${service_name}@${rev}]"
       systemctl start "${service_name}@${rev}.service"
+      systemd-notify READY=1 STATUS="started instance ${rev}"
 
     else
 
-      # Make sure there is only one service running
+      # Make sure there is only one instance running
       systemctl show --property=Id "$service_name"'@*' | grep '^Id=.*@[[:digit:]].*' | cut -d@ -f2 | sort -rn | tail -n +2 |\
       while read rev; do
         echo "[stopping ${service_name}@${rev}]"
         systemctl stop "${service_name}@${rev}"
       done
+
+      # Clean up old exited containers (TODO: check age)
+      docker ps -a -f status=exited -f "label=service_name=$service_name" |\
+        tail -n +2 | awk '{print $1}' | xargs -I {} docker rm {}
 
     fi
 

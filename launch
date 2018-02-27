@@ -2,18 +2,20 @@
 set -u
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-
 if (( $# != 3 ))
 then
-  echo "usage: $0 service-name service-address [service-instance|manager]"
+  echo "usage: $0 service-name [service-instance|manager] service-address"
   exit 1
 fi
 
+name="$1"
+instance="$2"
+address="$3"
 
-if [ "$3" = "manager" ]
+if [ "$instance" = "manager" ]
 then
-  exec "$DIR"/manager "$1" "$2"
+  exec "$DIR"/manager "$name" "$address"
 else
-  exec "$DIR"/run "$1" "$2" "$3"
+  exec "$DIR"/run "$name" "$instance" "$address"
 fi
 
