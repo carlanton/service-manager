@@ -33,7 +33,7 @@ function main
 {
   local service_name="$1"
   local service_address="$2"
-  local document_url="http://127.0.0.1:5984/services/${service_name}"
+  local document_url="${COUCHDB_URL}/${service_name}"
 
   curl -Isf "$document_url" > /dev/null ||\
       error "Failed to fetch config document"

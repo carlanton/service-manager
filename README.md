@@ -51,8 +51,8 @@ balancer and the service stops.
 
 ## Service definition
 
-Configuration documents are currently assumed to be located in CouchDb on
-`http://127.0.0.1:5984/service/$service_id` and may look like this:
+Configuration documents must be avaiable on `$COUCHDB_URL/$service_id` and may
+look like this:
 
 ```json
 {
@@ -86,6 +86,7 @@ Wants=couchdb.service
 After=docker.service,couchdb.service
 
 [Service]
+Environment=COUCHDB_URL=http://127.0.0.1:5984/services
 ExecStart=/opt/service-manager/launch %p %i 172.18.0.1:7001
 Type=notify
 TimeoutSec=infinity

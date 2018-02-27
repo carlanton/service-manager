@@ -4,7 +4,6 @@
 #
 # Simple wrapper that launches either the manager or the runner
 #
-set -u
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if (( $# != 3 ))
@@ -16,6 +15,11 @@ fi
 name="$1"
 instance="$2"
 address="$3"
+
+if [ -z "$COUCHDB_URL" ]
+then
+  export COUCHDB_URL="http://127.0.0.1:5984/services"
+fi
 
 if [ "$instance" = "manager" ]
 then

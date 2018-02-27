@@ -65,7 +65,7 @@ function main
   local service_instance="$2"
   local service_address="$3"
 
-  config=$(curl -sf "http://127.0.0.1:5984/services/${service_name}?rev=${service_instance}")
+  config=$(curl -sf "${COUCHDB_URL}/${service_name}?rev=${service_instance}")
   [ "$?" -eq 0 ] || error "Failed fetch config document"
 
   set -e
