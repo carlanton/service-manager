@@ -35,8 +35,7 @@ function main
   local service_address="$2"
   local document_url="${COUCHDB_URL}/${service_name}"
 
-  curl -Isf "$document_url" > /dev/null ||\
-      error "Failed to fetch config document"
+  curl -Isf "$document_url" > /dev/null || error "Failed to fetch config document"
 
   # Setup ipvs
   echo "[adding ipvs virtual service $service_address]"
@@ -52,7 +51,7 @@ function main
     if [ "$?" -ne 0 ]
     then
       echo "warning: failed to fetch config document $document_url"
-      sleep 5
+      sleep 10
       continue
     fi
 
@@ -72,13 +71,9 @@ function main
         systemctl stop "${service_name}@${rev}"
       done
 
-      # Clean up old exited containers (TODO: check age)
-      docker ps -a -f status=exited -f "label=service_name=$service_name" |\
-        tail -n +2 | awk '{print $1}' | xargs -I {} docker rm {}
-
     fi
 
-    sleep 5
+    sleep 10
   done
 }
 
