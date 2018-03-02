@@ -19,16 +19,15 @@ Requirements:
 The goal of `service-manager` is to run Docker containers in a way that allows
 rolling deployment without down-time, with zero dependencies (okay, this thing
 depends on CouchDb, but it can easily be re-implemented to use files on disk
-instad). To make this possible it uses a simple service abstraction on top of
+instead). To make this possible it uses a simple service abstraction on top of
 containers.
 
 There are many other solutions for this problem (swarm, kubernetes,
 consul+haproxy, ...), but most of them are rather complex to operate,
-especially have a single node or don't require container-to-container
-communication.
+especially if you only have a single server.
 
-However, if you aren't already using CouchDb, you're will probably be happier
-with Docker Swarm :)
+However, if you aren't already using CouchDb, you will probably be happier with
+Docker Swarm :)
 
 ## How it's supposed to work
 
@@ -40,18 +39,18 @@ The manager instance (`my-service@manager`) periodically fetches the latest
 service definition from CouchDb and starts a systemd instance with the document
 revision as instance id, for example
 `my-service@1-62d4023616ab1e7921f74f650aab51e1`. If the latest instance is
-already running, it will stop all previous instances. The manager also creates
-an ipvs "virtual service" on the `service address`. The service address should
-be used to access the service.
+already running, it will stop all other instances. The manager also creates an
+ipvs "virtual service" on the `service address`. The service address should be
+used to access the service.
 
 The service instance will start a Docker container based on the service
 definition document, wait for it to be ready for traffic, and add it to the
-load balancer. When the container exit, it will be removed from the load
+load balancer. When the container exits, it will be removed from the load
 balancer and the service stops.
 
 ## Service definition
 
-Configuration documents must be avaiable on `$COUCHDB_URL/$service_id` and may
+Configuration documents must be available on `$COUCHDB_URL/$service_id` and may
 look like this:
 
 ```json
