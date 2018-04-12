@@ -72,8 +72,23 @@ function main
   container_name="${service_name}.${service_instance}"
   container_image=$(jq -r '.image' <<< "$config")
   container_port=$(jq -r '.port' <<< "$config")
-  env_args=$(jq -r '.environment // {} | to_entries[] | "-e " + .key+"="+.value' <<< "$config")
-  vol_args=$(jq -r '.volumes // [] | map(. = ("-v " + .)) | join(" ")' <<< "$config")
+
+  args=(
+    '--detach'
+    '--log-driver' 'journald'
+    '--name' "$container_name"
+    '--label' "service_name=$service_name"
+    '-p' "$container_port"
+  )
+
+  while read arg; do args+=("-e" "$arg"); done < \
+    <(jq -r '.environment // {} | to_entries[] | .key + "=" + .value' <<< "$config")
+
+  while read arg; do args+=("-v" "$arg"); done < \
+    <(jq -r '.volumes // [] | .[]' <<< "$config")
+
+  args+=("$container_image")
+
   set +e
 
   # Remove previous container
@@ -85,13 +100,7 @@ function main
 
   # Start container
   echo "[starting container]"
-  container_id=$(docker run \
-    --detach \
-    --log-driver journald \
-    --name "$container_name" \
-    --label service_name="$service_name" \
-    -p "$container_port" \
-    $env_args $vol_args $container_image)
+  container_id=$(docker run "${args[@]}")
   [ "$?" -eq 0 ] || error "Failed to launch container"
 
   # Find container IP address
@@ -116,7 +125,6 @@ function main
   # Get the exit code and exit
   rc=$(docker inspect --format '{{.State.ExitCode}}' $container_id)
   echo "[container exited with status code $rc]"
-  #exit $rc
   exit 0
 }
 
