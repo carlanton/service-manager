@@ -54,8 +54,12 @@ function wait_for_http
   local port="$2"
   echo "[waiting for health check http://$ip:$port]"
 
-  curl -s --retry-max-time 60 --retry-delay 1 --retry-connrefused --retry 100 \
-    -H 'Host: health' "http://${ip}:${port}/"
+  curl --fail --silent \
+       --retry-max-time 60 \
+       --retry-delay 1 \
+       --retry-connrefused \
+       --retry 100 \
+       "http://${ip}:${port}/"
   [ "$?" -eq 0 ] || error "Container health check failed"
 }
 
