@@ -60,7 +60,7 @@ function main
   local service_name="$1"
   local service_address="$2"
   local document_url="${COUCHDB_URL}/${service_name}"
-  local feed="${COUCHDB_URL}/_changes?feed=continuous&filter=_doc_ids&doc_ids=\[\"$service_name\"\]"
+  local feed="${COUCHDB_URL}/_changes?feed=continuous&heartbeat=true&filter=_doc_ids&doc_ids=\[\"$service_name\"\]"
 
   curl -Isf "$document_url" > /dev/null || error "Failed to fetch config document"
 
@@ -75,7 +75,11 @@ function main
   do
     while read line
     do
-      [ -z "$line" ] || ensure_started "$service_name" $(jq -r '.changes[0] | .rev' <<< "$line")
+      if [ ! -z "$line" ]
+      then
+        rev=$(jq -r '.changes[0] | .rev // ""' <<< "$line")
+        [ -z "$rev" ] || ensure_started "$service_name" "$rev"
+      fi
       clean_up "$service_name"
     done < <(curl -Ns "$feed")
 
