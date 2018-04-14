@@ -1,0 +1,34 @@
+#!/bin/bash
+set -euo pipefail
+
+generator_dir="$1"
+conf="/opt/services.json"
+
+[ -f "$conf" ] || exit 0
+
+mkdir -p "${generator_dir}/multi-user.target.wants"
+
+while read line
+do
+  fields=($line)
+  service_name="${fields[0]}"
+  service_address="${fields[1]}"
+  unit_file="${generator_dir}/${service_name}@.service"
+  cat > "$unit_file" << EOF
+[Unit]
+Description=${service_name} (by service-manager)
+Requires=docker.service
+Wants=couchdb.service
+After=docker.service couchdb.service
+
+[Service]
+ExecStart=/opt/service-manager/launch %p %i ${service_address}
+Type=notify
+TimeoutSec=infinity
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  ln -sf "$unit_file" "${generator_dir}/multi-user.target.wants/${service_name}@manager.service"
+done < <(jq -r '.[] | [.name, .address] | @tsv' "$conf")
