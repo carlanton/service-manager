@@ -1,0 +1,10 @@
+[
+  {
+    "name": "serviceA",
+    "address": "172.17.0.1:7000"
+  },
+  {
+    "name": "serviceB",
+    "address": "172.17.0.1:7001"
+  }
+]

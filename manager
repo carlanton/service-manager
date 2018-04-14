@@ -12,6 +12,32 @@ function error
   exit 1
 }
 
+function clean_up
+{
+  local service_name="$1"
+
+  # Make sure there is only one instance running
+  while read rev
+  do
+    echo "[stopping ${service_name}@${rev}]"
+    systemctl stop "${service_name}@${rev}"
+  done < <(systemctl show --property=Id "$service_name"'@*' |\
+    grep '^Id=.*@[[:digit:]].*' | cut -d@ -f2 | sort -rn | tail -n +2)
+}
+
+function ensure_started
+{
+  local service_name="$1"
+  local rev="$2"
+
+  if ! systemctl is-active -q "${service_name}@${rev}.service"
+  then
+    echo "[starting ${service_name}@${rev}]"
+    systemctl start "${service_name}@${rev}.service"
+    systemd-notify READY=1 STATUS="started instance ${rev}"
+  fi
+}
+
 function stop
 {
   local service_name="$1"
@@ -34,6 +60,7 @@ function main
   local service_name="$1"
   local service_address="$2"
   local document_url="${COUCHDB_URL}/${service_name}"
+  local feed="${COUCHDB_URL}/_changes?feed=continuous&filter=_doc_ids&doc_ids=\[\"$service_name\"\]"
 
   curl -Isf "$document_url" > /dev/null || error "Failed to fetch config document"
 
@@ -44,36 +71,16 @@ function main
 
   trap "stop $service_name $service_address" EXIT TERM INT
 
-
   while true
   do
-    rev=$(curl -Isf "$document_url" | grep '^ETag:' | cut -d'"' -f2)
-    if [ "$?" -ne 0 ]
-    then
-      echo "warning: failed to fetch config document $document_url"
-      sleep 10
-      continue
-    fi
+    while read line
+    do
+      [ -z "$line" ] || ensure_started "$service_name" $(jq -r '.changes[0] | .rev' <<< "$line")
+      clean_up "$service_name"
+    done < <(curl -Ns "$feed")
 
-    if ! systemctl is-active -q "${service_name}@${rev}.service"
-    then
-
-      echo "[starting ${service_name}@${rev}]"
-      systemctl start "${service_name}@${rev}.service"
-      systemd-notify READY=1 STATUS="started instance ${rev}"
-
-    else
-
-      # Make sure there is only one instance running
-      systemctl show --property=Id "$service_name"'@*' | grep '^Id=.*@[[:digit:]].*' | cut -d@ -f2 | sort -rn | tail -n +2 |\
-      while read rev; do
-        echo "[stopping ${service_name}@${rev}]"
-        systemctl stop "${service_name}@${rev}"
-      done
-
-    fi
-
-    sleep 10
+    echo "warning: lost connection to CouchDb"
+    sleep 5
   done
 }
 
