@@ -83,6 +83,7 @@ function main
     '--name' "$container_name"
     '--label' "service_name=$service_name"
     '-p' "$container_port"
+    '-e' "SYSTEM_HOSTNAME=$(hostname)"
   )
 
   while read arg; do args+=("-e" "$arg"); done < \
