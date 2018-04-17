@@ -17,12 +17,16 @@ function clean_up
   local service_name="$1"
 
   # Make sure there is only one instance running
-  while read rev
+  while read service
   do
-    echo "[stopping ${service_name}@${rev}]"
-    systemctl stop "${service_name}@${rev}"
-  done < <(systemctl show --property=Id "$service_name"'@*' |\
-    grep '^Id=.*@[[:digit:]].*' | cut -d@ -f2 | sort -rn | tail -n +2)
+    echo "[stopping ${service}]"
+    systemctl stop "${service}"
+  done < <(systemctl show \
+             --type=service \
+             --value \
+             --state=running \
+             --property=Id "$service_name"'@*' |\
+             grep '.*@[[:digit:]]' | sort -rn | tail -n +2)
 }
 
 function ensure_started
@@ -33,8 +37,8 @@ function ensure_started
   if ! systemctl is-active -q "${service_name}@${rev}.service"
   then
     echo "[starting ${service_name}@${rev}]"
-    systemctl start "${service_name}@${rev}.service"
-    systemd-notify READY=1 STATUS="started instance ${rev}"
+    systemctl start "${service_name}@${rev}.service" && \
+        systemd-notify READY=1 STATUS="started instance ${rev}"
   fi
 }
 
