@@ -35,7 +35,7 @@ function wait_for_tcp
   local port="$2"
   echo "[waiting for health check tcp://$ip:$port]"
 
-  for ((i = 0; i <= 60; i++))
+  for ((i = 0; i <= 500; i++))
   do
     ncat -z "$ip" "$port"
     if [ "$?" -eq 0 ]
@@ -55,10 +55,10 @@ function wait_for_http
   echo "[waiting for health check http://$ip:$port]"
 
   curl --fail --silent \
-       --retry-max-time 60 \
+       --retry-max-time 500 \
        --retry-delay 1 \
        --retry-connrefused \
-       --retry 100 \
+       --retry 600 \
        "http://${ip}:${port}/"
   [ "$?" -eq 0 ] || error "Container health check failed"
 }
