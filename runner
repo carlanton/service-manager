@@ -63,6 +63,25 @@ function wait_for_http
   [ "$?" -eq 0 ] || error "Container health check failed"
 }
 
+function wait_for_up
+{
+  local ip="$1"
+  local port="$2"
+  echo "[waiting for status health check http://$ip:$port]"
+
+  for ((i = 0; i <= 500; i++))
+  do
+      status=$(curl -sf "http://${ip}:${port}/" | jq -r '.status')
+      if [ "$status" == "up" ]
+      then
+          return 0
+      fi
+      sleep 1
+  done
+
+  error "Container health check failed"
+}
+
 function main
 {
   local service_name="$1"
@@ -112,9 +131,17 @@ function main
   container_ip=$(docker inspect "$container_id" | jq -r '.[0].NetworkSettings.IPAddress')
 
   # Health check
-  jq -e '.health_check == "tcp"' > /dev/null <<< "$config" && \
-      wait_for_tcp "$container_ip" "$container_port" || \
-      wait_for_http "$container_ip" "$container_port"
+  case $(jq -r '.health_check' <<< "$config") in
+      tcp)
+          wait_for_tcp "$container_ip" "$container_port"
+          ;;
+      up)
+          wait_for_up "$container_ip" "$container_port"
+          ;;
+      *)
+          wait_for_http "$container_ip" "$container_port"
+          ;;
+  esac
 
   # Add to load balancer
   ipvsadm -a -t "$service_address" -r "${container_ip}:${container_port}" -m
